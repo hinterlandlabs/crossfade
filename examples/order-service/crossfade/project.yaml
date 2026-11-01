@@ -1,0 +1,7 @@
+name: order-service
+app:
+  start: python app.py
+  health: /health
+world:
+  plugin: world.py:SupplierWorld
+  fixture: default

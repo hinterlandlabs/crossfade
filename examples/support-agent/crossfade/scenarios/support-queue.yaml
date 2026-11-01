@@ -1,0 +1,99 @@
+name: support-queue
+description: 'A morning''s support queue: refund requests in and out of the return window, status questions, one vague opener.'
+seed: 3
+steps:
+- kind: conversation
+  message: Hi, I'd like a refund for order O-1001. It arrived damaged.
+  body:
+    conversation_id: c-0
+- kind: conversation
+  message: Can I return order O-1002? It's not what I expected.
+  body:
+    conversation_id: c-1
+- kind: conversation
+  message: Where is my order O-1003?
+  body:
+    conversation_id: c-2
+- kind: conversation
+  message: Please refund O-1004, the item stopped working.
+  body:
+    conversation_id: c-3
+- kind: conversation
+  message: I want my money back for O-1005.
+  body:
+    conversation_id: c-4
+- kind: conversation
+  message: Hi, I'd like a refund for order O-1006. It arrived damaged.
+  body:
+    conversation_id: c-5
+- kind: conversation
+  message: Can I return order O-1007? It's not what I expected.
+  body:
+    conversation_id: c-6
+- kind: conversation
+  message: Where is my order O-1008?
+  body:
+    conversation_id: c-7
+- kind: conversation
+  message: Please refund O-1009, the item stopped working.
+  body:
+    conversation_id: c-8
+- kind: conversation
+  message: I want my money back for O-1010.
+  body:
+    conversation_id: c-9
+- kind: conversation
+  message: Hi, I'd like a refund for order O-1011. It arrived damaged.
+  body:
+    conversation_id: c-10
+- kind: conversation
+  message: Can I return order O-1012? It's not what I expected.
+  body:
+    conversation_id: c-11
+- kind: conversation
+  message: Where is my order O-1013?
+  body:
+    conversation_id: c-12
+- kind: conversation
+  message: Please refund O-1014, the item stopped working.
+  body:
+    conversation_id: c-13
+- kind: conversation
+  message: I want my money back for O-1015.
+  body:
+    conversation_id: c-14
+- kind: conversation
+  message: Hi, I'd like a refund for order O-1016. It arrived damaged.
+  body:
+    conversation_id: c-15
+- kind: conversation
+  message: Can I return order O-1017? It's not what I expected.
+  body:
+    conversation_id: c-16
+- kind: conversation
+  message: Where is my order O-1018?
+  body:
+    conversation_id: c-17
+- kind: conversation
+  message: Please refund O-1019, the item stopped working.
+  body:
+    conversation_id: c-18
+- kind: conversation
+  message: I want my money back for O-1020.
+  body:
+    conversation_id: c-19
+- kind: conversation
+  message: Hello, can you help me?
+  body:
+    conversation_id: c-x
+expect:
+- target: responses[0].body.reply
+  op: contains
+  value: refunded
+  description: O-1001 (3 days) is refunded
+- target: responses[2].body.reply
+  op: contains
+  value: delivered
+  description: status questions get a delivery answer
+- target: world.refunds
+  op: exists

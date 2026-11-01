@@ -1,0 +1,7 @@
+name: support-agent
+app:
+  start: python agent.py
+  health: /health
+world:
+  plugin: world.py:SupportWorld
+  fixture: default

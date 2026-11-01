@@ -1,0 +1,20 @@
+name: checkout
+description: A morning of ordinary checkouts, including one that asks for more than the supplier has.
+seed: 1
+steps:
+  - {kind: http, method: POST, path: /orders, body: {customer: c-1, lines: [{sku: sku-1, qty: 2}, {sku: sku-2, qty: 1}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-2, lines: [{sku: sku-3, qty: 1}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-3, lines: [{sku: sku-4, qty: 3}, {sku: sku-1, qty: 1}, {sku: sku-2, qty: 2}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-4, lines: [{sku: sku-5, qty: 1}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-5, lines: [{sku: sku-5, qty: 20}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-6, lines: [{sku: sku-2, qty: 4}, {sku: sku-3, qty: 2}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-7, lines: [{sku: sku-1, qty: 1}, {sku: sku-4, qty: 1}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c-8, lines: [{sku: nope, qty: 1}]}}
+expect:
+  - {target: "responses[0].status", op: eq, value: 201}
+  - {target: "responses[0].body.total_cents", op: eq, value: 3097, description: "c-1 is charged 2 x 1299 + 499"}
+  - {target: "responses[2].body.total_cents", op: eq, value: 4994, description: "c-3 is charged 3 x 899 + 1299 + 2 x 499"}
+  - {target: "responses[4].status", op: eq, value: 409, description: "an order for 20 of sku-5 is refused (10 in stock)"}
+  - {target: "responses[7].status", op: eq, value: 422}
+  - {target: "world.products.sku-1.stock", op: eq, value: 46}
+  - {target: "world.products.sku-5.stock", op: eq, value: 9}

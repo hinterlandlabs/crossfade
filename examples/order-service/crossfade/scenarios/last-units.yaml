@@ -1,0 +1,12 @@
+name: last-units
+description: Two customers want the last units of a scarce item. Only the first can have them.
+seed: 2
+holdout: true
+steps:
+  - {kind: http, method: POST, path: /orders, body: {customer: a, lines: [{sku: sku-6, qty: 2}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: b, lines: [{sku: sku-6, qty: 1}, {sku: sku-1, qty: 1}]}}
+  - {kind: http, method: POST, path: /orders, body: {customer: c, lines: [{sku: sku-1, qty: 1}]}}
+expect:
+  - {target: "responses[0].status", op: eq, value: 201}
+  - {target: "responses[1].status", op: eq, value: 409, description: "nothing left to sell"}
+  - {target: "world.products.sku-6.stock", op: eq, value: 0}

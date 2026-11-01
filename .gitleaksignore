@@ -1,0 +1,2 @@
+# Fake token used by tests/unit/test_store.py to verify redaction (not a real credential).
+7264bbcf7bd9cfd43a26b899f3a5570df5cd1a81:tests/unit/test_store.py:generic-api-key:66

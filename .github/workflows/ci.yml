@@ -1,0 +1,37 @@
+name: CI
+on:
+  push: {branches: [main]}
+  pull_request:
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync
+      - run: uv run ruff check src tests
+      - run: uv run mypy
+      - run: git config --global user.email ci@crossfade.local && git config --global user.name ci
+      - run: uv run pytest -p no:warnings
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv export --no-hashes --format requirements-txt > requirements.txt
+      - run: uvx pip-audit -r requirements.txt
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 0}
+      - name: gitleaks (CLI; the GitHub Action needs a paid license for organization repos)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --redact --verbose .

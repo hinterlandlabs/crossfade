@@ -1,0 +1,11 @@
+version: "1"
+owner: support-agent maintainers
+protected_paths: ["crossfade/", ".crossfade/"]
+gates: [no_refund_outside_return_window, eligible_refunds_are_issued, no_duplicate_refunds, every_message_answered]
+objectives:
+  - {metric: model_cost_usd, direction: lower, min_improvement: 0.05, role: primary}
+  - {metric: latency_ms, direction: lower, max_regression: 0.15, role: guard}
+confidence: 0.9
+min_trials: 3
+max_cv: 0.35
+timeout_seconds: 120

@@ -1,0 +1,11 @@
+version: "1"
+owner: order-service maintainers
+protected_paths: ["crossfade/", ".crossfade/"]
+gates: [every_confirmed_order_is_reserved, payments_match_orders, no_errors]
+objectives:
+  - {metric: latency_ms, direction: lower, min_improvement: 0.10, role: primary}
+  - {metric: dependency_calls, direction: lower, max_regression: 0.10, role: guard}
+confidence: 0.9
+min_trials: 5
+max_cv: 0.35
+timeout_seconds: 60

@@ -1,0 +1,31 @@
+name: edge-of-window
+description: Requests right at the boundary of the return window.
+seed: 4
+holdout: true
+steps:
+- kind: conversation
+  message: Please refund order O-1009, I changed my mind.
+  body:
+    conversation_id: e-O-1009
+- kind: conversation
+  message: Please refund order O-1019, I changed my mind.
+  body:
+    conversation_id: e-O-1019
+- kind: conversation
+  message: Please refund order O-1005, I changed my mind.
+  body:
+    conversation_id: e-O-1005
+- kind: conversation
+  message: Please refund order O-1010, I changed my mind.
+  body:
+    conversation_id: e-O-1010
+expect:
+- target: responses[0].body.reply
+  op: contains
+  value: refunded
+- target: responses[1].body.reply
+  op: contains
+  value: refunded
+- target: responses[2].body.reply
+  op: contains
+  value: window
