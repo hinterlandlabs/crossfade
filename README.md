@@ -42,9 +42,15 @@ for one change, `crossfade compare main some-branch` runs one experiment, and `c
 
 ## The parts
 
-- `crossfade.harness` is the runtime for agents you build yourself. It handles the model loop, tools and state, enforces
-  step limits, tool allow-lists and token budgets, holds irreversible tool calls behind a gate, and traces every model and
-  tool call with OpenTelemetry.
+- `crossfade.harness` is the runtime for agents you build yourself. It runs the model loop (several tool calls per reply
+  are fine), enforces step limits, tool allow-lists and token budgets, and holds irreversible tools behind a gate. Hooks
+  around model and tool calls handle guardrails or caching. It talks to Anthropic, any OpenAI-compatible endpoint (Ollama
+  and vLLM included) or a chain of fallbacks, retrying 429s and 5xx. Its spans follow the OpenTelemetry GenAI conventions.
+- Traces are joined. Every outgoing HTTP call carries the trace context, so a dependency call Crossfade measured shows up
+  under the tool call or handler that made it. `crossfade traces diff` lines up what two versions did, call path by call
+  path. In the `trim-prompt` experiment it shows `issue_refund` running 16 times per run instead of 9. `crossfade traces
+  export` sends runs to Jaeger, Langfuse, Phoenix or anything that takes OTLP, each one tagged with its commit, its
+  experiment and the decision, so the dashboards you already use can be filtered down to the changes that were rejected.
 - Worlds stand in for an app's dependencies. They keep state, so a write shows up in later reads. The clock is simulated,
   failures come from a seed, and a world can be snapshotted and restored. Each one documents what it doesn't model.
   Calls, latency and tokens are counted inside the world, where the app under test can't touch the numbers.
@@ -131,7 +137,7 @@ or the MCP server (`crossfade mcp`); see [docs/guides/agents.md](docs/guides/age
 ## Documentation
 
 - [Architecture](docs/architecture/overview.md) and [threat model](docs/architecture/security.md)
-- Concepts: [worlds](docs/concepts/worlds.md), [experiments](docs/concepts/experiments.md), [evaluation](docs/concepts/evaluation.md), [the harness](docs/concepts/harness.md)
+- Concepts: [worlds](docs/concepts/worlds.md), [experiments](docs/concepts/experiments.md), [evaluation](docs/concepts/evaluation.md), [the harness](docs/concepts/harness.md), [traces](docs/concepts/traces.md)
 - Guides: [quickstart](docs/guides/quickstart.md), [new project](docs/guides/new-project.md), [coding agents](docs/guides/agents.md), [local development](docs/guides/development.md)
 - Reference: [CLI](docs/reference/cli.md), [API](docs/reference/api.md), [bundle format](docs/reference/bundle.md), [plugins](docs/reference/plugins.md)
 - [Generalization notes](docs/generalization.md) and [known limitations](docs/limitations.md)

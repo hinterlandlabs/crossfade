@@ -13,7 +13,7 @@ from typing import Annotated, Any, NoReturn
 
 import typer
 
-from . import discovery, experiments, findings, revisions, telemetry
+from . import discovery, experiments, export, findings, revisions, telemetry
 from .models import Decision, Evaluation, Experiment, Finding, Hypothesis, Outcome, Revision, Run, new_id
 from .project import BUNDLE_DIR, STATE_DIR, Workspace, WorkspaceError
 from .runner import load_outcome, load_spans, run_scenario
@@ -482,7 +482,7 @@ def world_reset() -> None:
 
 @traces_app.command("show")
 def traces_show(run_id: str, as_json: JSON = False) -> None:
-    """Show a run's spans as a tree, with timing and status."""
+    """Show a run's spans as a tree, with timing and status. Dependency calls Crossfade measured sit under the span that made them."""
     w = ws()
     r = w.ledger.get(run_id, Run)
     spans = load_spans(w, r)
@@ -492,11 +492,92 @@ def traces_show(run_id: str, as_json: JSON = False) -> None:
     def walk(nodes: list[dict[str, Any]], depth: int = 0) -> None:
         for n in nodes:
             s = n["span"]
-            typer.echo(f"{'  ' * depth}{s['name'][:60]:60} {(s['end'] - s['start']) * 1000:8.2f} ms  {s['status']}{'  (orphan)' if n.get('orphan') else ''}")
+            mark = "  (measured)" if s["source"] == "world" else "  (orphan)" if n.get("orphan") else ""
+            typer.echo(f"{'  ' * depth}{s['name'][:60]:60} {(s['end'] - s['start']) * 1000:8.2f} ms  {s['status']}{mark}")
             walk(n["children"], depth + 1)
 
-    walk(telemetry.tree([s for s in spans if s.source != "world"]))
-    typer.echo(f"-- {sum(1 for s in spans if s.source == 'world')} dependency calls measured by the world; coverage {telemetry.coverage(spans)}")
+    walk(telemetry.tree(spans))
+    cov = telemetry.coverage(spans)
+    typer.echo(f"-- {cov['dependency_spans']} dependency calls measured by Crossfade, {cov['dependency_spans_linked']} traced to the code that made them; "
+               f"{cov['model_spans']} model calls ({cov['model_spans_with_tokens']} with token counts); {cov['orphans']} orphan spans")
+
+
+@traces_app.command("diff")
+def traces_diff(
+    a: Annotated[str | None, typer.Argument(help="Run id of the original (or use --experiment).")] = None,
+    b: Annotated[str | None, typer.Argument(help="Run id of the change.")] = None,
+    experiment: Annotated[str | None, typer.Option("--experiment", "-e", help="Compare every completed run of both sides.")] = None,
+    scenario: Annotated[str | None, typer.Option(help="Only this scenario (with --experiment).")] = None,
+    limit: Annotated[int, typer.Option(help="Rows to print.")] = 20,
+    as_json: JSON = False,
+) -> None:
+    """What the change does differently: call paths that appear, disappear, run more or fewer times, or take longer."""
+    w = ws()
+    try:
+        if experiment:
+            d = export.behaviour_diff(w, experiment, scenario)
+        elif a and b:
+            d = telemetry.diff([load_spans(w, w.ledger.get(a, Run))], [load_spans(w, w.ledger.get(b, Run))])
+        else:
+            fail("give two run ids, or --experiment")
+    except KeyError as e:
+        fail(f"not found: {e.args[0]}")
+    if as_json:
+        return out(d, True)
+    t = d["totals"]
+    typer.echo(f"original: {d['runs_a']} run(s), change: {d['runs_b']} run(s); per run: spans {t['count_a']:g} -> {t['count_b']:g}, "
+               f"errors {t['errors_a']:g} -> {t['errors_b']:g}, input tokens {t['input_tokens_a']:g} -> {t['input_tokens_b']:g}")
+    if not d["rows"]:
+        typer.echo("no differences in call paths")
+    for r in d["rows"][:limit]:
+        typer.echo(f"{r['change']:8} {r['count_a']:6g} -> {r['count_b']:<6g} {r['ms_a']:9.1f} -> {r['ms_b']:<9.1f} ms  {r['path'][-110:]}")
+    if len(d["rows"]) > limit:
+        typer.echo(f"... {len(d['rows']) - limit} more (--limit, or --json)")
+
+
+@traces_app.command("export")
+def traces_export(
+    run_ids: Annotated[list[str] | None, typer.Argument(help="Runs to export (or use --experiment).")] = None,
+    experiment: Annotated[str | None, typer.Option("--experiment", "-e", help="Export every run of an experiment.")] = None,
+    endpoint: Annotated[str | None, typer.Option("--otlp", envvar="OTEL_EXPORTER_OTLP_ENDPOINT",
+                                                 help="OTLP/HTTP endpoint, e.g. http://localhost:4318. Headers come from OTEL_EXPORTER_OTLP_HEADERS.")] = None,
+    to_file: Annotated[Path | None, typer.Option("--out", help="Write OTLP/JSON to a file instead of sending it.")] = None,
+    include_holdouts: Annotated[bool, typer.Option("--include-holdouts", help="Also export holdout runs (left out by default).")] = False,
+    as_json: JSON = False,
+) -> None:
+    """Send runs to any OpenTelemetry backend, tagged with their commit, scenario, experiment and decision."""
+    import os
+
+    w = ws()
+    try:
+        if experiment:
+            _, base, cand = export.runs_by_side(w, experiment)
+            runs = base + cand
+        elif run_ids:
+            runs = [w.ledger.get(i, Run) for i in run_ids]
+        else:
+            fail("give run ids, or --experiment")
+    except KeyError as e:
+        fail(f"not found: {e.args[0]}")
+    if not endpoint and not to_file:
+        fail("give --otlp URL (or set OTEL_EXPORTER_OTLP_ENDPOINT), or --out FILE")
+    payload, skipped = export.otlp(w, runs, include_holdouts)
+    n = sum(len(ss["spans"]) for rs in payload["resourceSpans"] for ss in rs["scopeSpans"])
+    if to_file:
+        to_file.write_text(json.dumps(payload))
+        where = str(to_file)
+    else:
+        assert endpoint
+        headers = dict(kv.split("=", 1) for kv in os.environ.get("OTEL_EXPORTER_OTLP_HEADERS", "").split(",") if "=" in kv)
+        try:
+            export.send(endpoint, payload, headers)
+        except Exception as e:  # noqa: BLE001
+            fail(f"export failed: {e}")
+        where = endpoint
+    w.ledger.append("trace.exported", actor="human", project_id=w.project.id, subject=experiment or None, runs=len(runs) - len(skipped),
+                    spans=n, destination="file" if to_file else "otlp")
+    out({"runs": len(runs) - len(skipped), "spans": n, "skipped": skipped, "destination": where}, as_json,
+        f"exported {n} spans from {len(runs) - len(skipped)} run(s) to {where}" + (f"; left out {len(skipped)} (holdout or no trace)" if skipped else ""))
 
 
 @traces_app.command("import")

@@ -23,6 +23,8 @@ Instruction-like text inside any of these never changes policy.
 | Agent inherits secrets from the environment | Agents get PATH, HOME, locale and terminal variables plus only what `--pass-env` names. |
 | Agent writes to protected paths | The patch is checked before it is applied; writes to protected paths are refused and recorded as `agent.protected_write`. |
 | Evidence leaks through the API | `/v1/artifacts` never serves locked bundles or holdout-run evidence; holdout run outcomes and traces are withheld. |
+| Holdouts leak through comparisons or export | Behaviour diffs skip holdout runs; `/v1/traces/diff` refuses them; `traces export` leaves them out unless `--include-holdouts` is given, and records every export as `trace.exported`. |
+| Conversation content lands in traces | The harness records prompts and replies only when content capture is switched on; redaction still runs before storage. |
 | Residue from earlier runs affects a later one | Worktrees are force-checked-out and `git clean -ffdx`'d before every run. |
 | Missing or failed measurements fake an improvement | Objectives are compared only over identical, complete trial/scenario cells; any baseline crash makes the result inconclusive. |
 | Agent writes a decision | Decisions are written only by the evaluator. Agents have explicit capabilities (`agents.Capability`); `admin_policy` and `external_writes` are not granted by default. |

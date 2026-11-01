@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import discovery, experiments, telemetry
+from . import discovery, experiments, export, telemetry
 from .models import Candidate, Experiment, Finding, Hypothesis, Revision, Run, new_id
 from .plugins import status as plugin_status
 from .project import Workspace
@@ -138,8 +138,26 @@ def create_app(ws: Workspace) -> FastAPI:
         if is_holdout(r):
             return {"tree": [], "dependencies": [], "coverage": {}, "withheld": "holdout scenario"}
         spans = load_spans(ws, r)
-        return {"tree": telemetry.tree([s for s in spans if s.source != "world"]), "dependencies": [s.model_dump() for s in spans if s.source == "world"],
+        # measured dependency calls sit in the tree under the span that made them; `dependencies` lists them flat
+        return {"tree": telemetry.tree(spans), "dependencies": [s.model_dump() for s in spans if s.source == "world"],
                 "coverage": telemetry.coverage(spans)}
+
+    @app.get("/v1/experiments/{exp_id}/diff")
+    def experiment_diff(exp_id: str, scenario: str | None = None) -> dict[str, Any]:
+        try:
+            return export.behaviour_diff(ws, exp_id, scenario)
+        except KeyError as e:
+            raise HTTPException(404, "no such experiment") from e
+
+    @app.get("/v1/traces/diff")
+    def runs_diff(a: str, b: str) -> dict[str, Any]:
+        try:
+            ra, rb = ws.ledger.get(a, Run), ws.ledger.get(b, Run)
+        except KeyError as e:
+            raise HTTPException(404, "no such run") from e
+        if is_holdout(ra) or is_holdout(rb):
+            raise HTTPException(403, "holdout runs are not compared")
+        return telemetry.diff([load_spans(ws, ra)], [load_spans(ws, rb)])
 
     @app.get("/v1/traces/search")
     def search_spans(name: str = "%", status: str | None = None, limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:

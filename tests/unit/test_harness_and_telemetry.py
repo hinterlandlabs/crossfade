@@ -41,10 +41,17 @@ def test_agent_loop_runs_tools_and_traces_them():
                         ModelReply("text", text="done", input_tokens=12, output_tokens=3)]), "sys", [echo])
     r = a.respond("c1", "hello")
     assert r.text == "done" and r.steps == 2 and r.input_tokens == 22
-    names = [s.name for s in exporter.get_finished_spans()]
-    assert names.count("model complete") == 2 and "tool echo" in names and "agent agent turn" in names
-    model_span = next(s for s in exporter.get_finished_spans() if s.name == "model complete")
-    assert model_span.attributes["gen_ai.usage.input_tokens"] == 10
+    spans = exporter.get_finished_spans()
+    names = [s.name for s in spans]
+    assert names.count("chat") == 2 and "execute_tool echo" in names and "invoke_agent agent" in names
+    chat = next(s for s in spans if s.name == "chat")
+    assert chat.attributes["gen_ai.usage.input_tokens"] == 10 and chat.attributes["gen_ai.operation.name"] == "chat"
+    assert chat.attributes["gen_ai.conversation.id"] == "c1" and chat.kind == trace.SpanKind.CLIENT
+    tool_span = next(s for s in spans if s.name == "execute_tool echo")
+    assert tool_span.attributes["gen_ai.tool.call.id"].startswith("call_")
+    assert tool_span.parent.span_id == next(s for s in spans if s.name == "invoke_agent agent").context.span_id
+    # content is off unless asked for
+    assert "gen_ai.input.messages" not in chat.attributes
 
 
 def test_step_limit_is_enforced():

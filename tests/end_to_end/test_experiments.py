@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from crossfade import agents, experiments
 from crossfade.api import create_app
-from crossfade.models import Outcome, Run
+from crossfade.models import Outcome, Revision, Run
 
 
 def test_order_service(example_ws):
@@ -92,3 +92,35 @@ def test_mcp_exposes_tools_without_holdouts(example_ws):
     assert {"inspect_project", "list_scenarios", "request_experiment", "get_trace"} <= names
     res = asyncio.run(server.call_tool("list_scenarios", {}))
     assert "last-units" not in str(res) and "checkout" in str(res)
+
+
+def test_behaviour_diff_and_export_tie_traces_to_the_decision(example_ws, tmp_path):
+    import json
+
+    from typer.testing import CliRunner
+
+    from crossfade import export, telemetry
+    from crossfade.cli import app
+
+    ws = example_ws("order-service")
+    res = experiments.run(ws, experiments.create(ws, "batch", "main", "batch-lookups", trials=1))
+    d = export.behaviour_diff(ws, res.experiment.id)
+    added = [r["path"] for r in d["rows"] if r["change"] == "added"]
+    removed = [r["path"] for r in d["rows"] if r["change"] == "removed"]
+    assert any(p.endswith("supplier GET /products") for p in added), added  # the batch call appears
+    assert any("/products/{sku}" in p for p in removed), removed  # the per-item lookups are gone
+    out = tmp_path / "otlp.json"
+    r = CliRunner().invoke(app, ["traces", "export", "--experiment", res.experiment.id, "--out", str(out), "--json"])
+    assert r.exit_code == 0, r.output
+    summary = json.loads(r.output)
+    holdout_runs = [i for i in summary["skipped"] if ws.bundle().scenarios[ws.ledger.get(i, Run).scenario].holdout]
+    assert holdout_runs and len(holdout_runs) == len(summary["skipped"])  # holdouts stay home by default
+    payload = json.loads(out.read_text())
+    resources = [{a["key"]: list(a["value"].values())[0] for a in rs["resource"]["attributes"]} for rs in payload["resourceSpans"]]
+    assert {x["crossfade.decision"] for x in resources} == {res.decision.outcome.value}
+    assert {x["crossfade.side"] for x in resources} == {"original", "change"}
+    assert {x["vcs.ref.head.revision"] for x in resources} == {ws.ledger.get(res.experiment.baseline_revision, Revision).commit,
+                                                              ws.ledger.get(res.experiment.candidate_revision, Revision).commit}
+    assert len(telemetry.from_otlp_json(payload)) == summary["spans"]
+    r = CliRunner().invoke(app, ["traces", "diff", "--experiment", res.experiment.id])
+    assert r.exit_code == 0 and "added" in r.output, r.output

@@ -26,7 +26,7 @@ def detect(spans: list[Span]) -> list[dict[str, object]]:
     for s in app:
         if not s.parent_id:
             continue
-        is_tool = s.name.startswith("tool ")
+        is_tool = s.name.startswith(("tool ", "execute_tool "))
         is_dep = s.name.lower().startswith(("supplier", "http", "get ", "post ")) or "http.status_code" in s.attributes
         # writes with different bodies are different calls; only reads (or tool calls with identical args) can be redundant
         is_write = any(f" {verb} " in f" {s.name} " for verb in ("POST", "PUT", "PATCH", "DELETE")) or s.attributes.get("http.method") in ("POST", "PUT", "PATCH", "DELETE")

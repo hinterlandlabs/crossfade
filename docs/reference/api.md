@@ -15,7 +15,9 @@ Read endpoints are open on localhost. Mutating endpoints require `Authorization:
 | POST | `/v1/experiments` | create `{baseline, candidate, name?, trials?, hypothesis?}` (auth) |
 | POST | `/v1/experiments/{id}/run` | run in the background; poll the experiment (auth) |
 | GET | `/v1/runs`, `/v1/runs/{id}` | runs; outcome (responses, world state, meters) and log tail |
-| GET | `/v1/runs/{id}/trace` | span tree, dependency calls, coverage |
+| GET | `/v1/runs/{id}/trace` | span tree with measured dependency calls under the spans that made them, the calls as a flat list, coverage |
+| GET | `/v1/experiments/{id}/diff?scenario=` | what the candidate did differently, per call path (holdouts excluded) |
+| GET | `/v1/traces/diff?a=&b=` | the same for two runs (403 for holdout runs) |
 | GET | `/v1/traces/search?name=&status=` | span index |
 | POST | `/v1/traces` | import OTLP/JSON (auth) |
 | GET | `/v1/scenarios` | scenarios; holdout contents are withheld |

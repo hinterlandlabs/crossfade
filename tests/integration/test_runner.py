@@ -1,4 +1,4 @@
-from crossfade import revisions
+from crossfade import revisions, telemetry
 from crossfade.models import RunStatus
 from crossfade.project import WorkspaceError
 from crossfade.runner import run_scenario
@@ -85,3 +85,18 @@ def test_a_stuck_app_reports_where_it_hung(example_ws):
     res = run_scenario(ws, b, revisions.resolve(ws, "HEAD"), b.scenarios["checkout"])
     assert res.run.status == RunStatus.INFRA_FAILED
     assert "did not become healthy" in res.run.error and "wait_forever" in res.run.error  # the stack says where
+
+
+def test_every_dependency_call_is_traced_to_the_code_that_made_it(example_ws):
+    for name, scenario in (("order-service", "checkout"), ("support-agent", None)):
+        ws = example_ws(name)
+        b = ws.bundle()
+        sc = b.scenarios[scenario] if scenario else next(s for s in b.scenarios.values() if not s.holdout)
+        res = run_scenario(ws, b, revisions.resolve(ws, "main"), sc)
+        assert res.run.status == RunStatus.COMPLETED, res.run.error
+        cov = telemetry.coverage(res.spans)
+        assert cov["dependency_spans"] > 0 and cov["dependency_spans_linked"] == cov["dependency_spans"], (name, cov)
+        by_id = {s.span_id: s for s in res.spans}
+        parents = {by_id[s.parent_id].name for s in res.spans if s.source == "world"}
+        if name == "support-agent":  # the model call sits under the chat span, the order lookup under the tool span
+            assert any(p.startswith("chat") for p in parents) and any(p.startswith("execute_tool") or p == "invoke_agent support" for p in parents), parents

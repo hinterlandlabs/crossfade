@@ -23,7 +23,9 @@ Any agent works: `codex exec "..."`, a script, or a person typing.
 ## MCP
 
 `crossfade mcp` serves tools over stdio: `inspect_project`, `list_findings`, `list_scenarios`, `get_trace`, `record_findings`,
-`propose_hypothesis`, `request_experiment`, `experiment_history`, `world_coverage`. Authorization and evaluation stay in the core.
+`propose_hypothesis`, `request_experiment`, `compare_behaviour`, `experiment_history`, `world_coverage`. Authorization and
+evaluation stay in the core. `request_experiment` returns the decision with the call paths that changed, and
+`compare_behaviour` gives the full comparison, so an agent whose change was rejected can see what the change did.
 
 ## Capabilities
 

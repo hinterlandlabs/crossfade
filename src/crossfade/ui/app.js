@@ -19,8 +19,19 @@ function diffHtml(p) {
   return esc(p).split('\n').map(l => l.startsWith('+') && !l.startsWith('+++') ? `<span class="add">${l}</span>` : l.startsWith('-') && !l.startsWith('---') ? `<span class="del">${l}</span>` : l).join('\n');
 }
 
+function behaviour(b) {
+  if (!b || !b.rows.length) return '';
+  const rows = b.rows.slice(0, 25), t = b.totals;
+  const cell = (a, c) => `${num(a, 3)} → ${num(c, 3)}`;
+  return `<h2>What the candidate did differently <span class="small muted">per run, from traces of ${b.runs_a} baseline and ${b.runs_b} candidate runs (holdouts excluded)</span></h2>
+  <p class="small muted">Spans per run ${cell(t.count_a, t.count_b)} · errors ${cell(t.errors_a, t.errors_b)} · input tokens ${cell(t.input_tokens_a, t.input_tokens_b)}</p>
+  <table><thead><tr><th>Change</th><th>Call path</th><th class="num">Times</th><th class="num">ms</th></tr></thead><tbody>
+  ${rows.map(r => `<tr><td class="${r.change === 'added' || r.change === 'removed' ? 'mono change ' + r.change : 'mono muted'}">${esc(r.change)}</td><td class="mono small path">${esc(r.path)}</td><td class="num">${cell(r.count_a, r.count_b)}</td><td class="num">${cell(r.ms_a, r.ms_b)}</td></tr>`).join('')}</tbody></table>
+  ${b.rows.length > rows.length ? `<p class="small muted">${b.rows.length - rows.length} more rows: <span class="mono">crossfade traces diff -e ${esc(b.experiment)}</span></p>` : ''}`;
+}
+
 async function experiment(id) {
-  const d = await api('/experiments/' + id);
+  const [d, b] = await Promise.all([api('/experiments/' + id), api('/experiments/' + id + '/diff').catch(() => null)]);
   const ev = d.evaluation, dec = d.decision;
   const gates = ev ? ev.checks.filter(c => c.kind === 'gate') : [];
   const objs = ev ? ev.checks.filter(c => c.kind === 'objective') : [];
@@ -38,6 +49,7 @@ async function experiment(id) {
   </div>
   ${gates.length ? `<h2>Required checks</h2><table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead><tbody>
   ${gates.map(c => `<tr><td class="mono">${esc(c.name)}</td><td class="${c.passed ? 'pass' : 'fail'}">${c.passed ? 'pass' : 'fail'}</td><td class="small">${esc(c.detail)}</td></tr>`).join('')}</tbody></table>` : ''}
+  ${behaviour(b)}
   <h2>Runs</h2><table><thead><tr><th>Side</th><th>Scenario</th><th class="num">Trial</th><th>Status</th>${metrics.map(m => `<th class="num">${esc(m)}</th>`).join('')}</tr></thead><tbody>
   ${runs.map(r => `<tr class="click" data-href="#/run/${r.id}"><td>${esc(r.side)}</td><td>${esc(r.scenario)}</td><td class="num">${r.trial + 1}</td><td>${esc(r.status)}</td>${metrics.map(m => `<td class="num">${num(r.metrics[m], 4)}</td>`).join('')}</tr>`).join('')}</tbody></table>
   ${d.patch ? `<h2>Patch</h2><pre class="diff">${diffHtml(d.patch)}</pre>` : ''}
@@ -56,13 +68,13 @@ async function run(id) {
   <p class="mono muted">${d.run.id} · revision ${esc(d.run.revision_id)} · trial ${d.run.trial + 1} · seed ${d.run.seed} · world ${esc(d.run.world)} ${esc(d.run.world_snapshot_digest.slice(0, 19))}</p>
   ${d.run.error ? `<p class="error">${esc(d.run.error)}</p>` : ''}
   <div class="grid">${Object.entries(d.run.metrics).filter(([k]) => !k.startsWith('calls:')).map(([k, v]) => `<div class="card"><span class="muted small">${esc(k)}</span><b>${num(v, 4)}</b></div>`).join('')}</div>
-  <h2>Trace <span class="small muted">${spans.length} application spans, ${t.dependencies.length} dependency calls measured by the world. Select a span for its attributes.</span></h2>
-  <div class="tree" id="tree">${spans.map((s, i) => `<div class="span ${s.status === 'error' ? 'err' : ''}" data-i="${i}"><span class="nm" style="padding-left:${s.depth * 14}px">${esc(s.name)}${s.orphan ? ' <span class="muted">(parent not captured)</span>' : ''}</span>
-  <span class="bar"><i style="left:${(s.start - t0) / W * 100}%;width:${(s.end - s.start) / W * 100}%"></i></span><span class="ms">${num((s.end - s.start) * 1000, 2)} ms</span></div>`).join('')}</div>
+  ${t.withheld ? `<h2>Trace</h2><p class="muted">Withheld: this run is from a holdout scenario.</p>` : `<h2>Trace <span class="small muted">${spans.length - t.dependencies.length} application spans and ${t.dependencies.length} dependency calls Crossfade measured (${t.coverage.dependency_spans_linked ?? 0} placed under the code that made them). Select a span for its attributes.</span></h2>
+  <div class="tree" id="tree">${spans.map((s, i) => `<div class="span ${s.status === 'error' ? 'err' : ''} ${s.source === 'world' ? 'dep' : ''}" data-i="${i}"><span class="nm" style="padding-left:${s.depth * 14}px">${esc(s.name)}${s.source === 'world' ? ' <span class="muted">measured</span>' : ''}${s.orphan ? ' <span class="muted">(parent not captured)</span>' : ''}</span>
+  <span class="bar"><i style="left:${(s.start - t0) / W * 100}%;width:${(s.end - s.start) / W * 100}%"></i></span><span class="ms">${num((s.end - s.start) * 1000, 2)} ms</span></div>`).join('')}</div>`}
   <h2>Responses</h2><table><thead><tr><th class="num">Step</th><th>Status</th><th class="num">ms</th><th>Body</th></tr></thead><tbody>
   ${resp.map(r => `<tr><td class="num">${r.step}</td><td>${esc(r.status ?? r.kind)}</td><td class="num">${num(r.ms, 1)}</td><td class="mono small">${esc(JSON.stringify(r.body ?? r.error ?? '')).slice(0, 300)}</td></tr>`).join('')}</tbody></table>
   <h2>Application log</h2><pre>${esc(d.log_tail || '(empty)')}</pre>`;
-  document.getElementById('tree').addEventListener('click', e => {
+  document.getElementById('tree')?.addEventListener('click', e => {
     const row = e.target.closest('.span'); if (!row) return;
     document.querySelectorAll('.attrs').forEach(a => a.remove()); document.querySelectorAll('.span.sel').forEach(a => a.classList.remove('sel'));
     row.classList.add('sel');

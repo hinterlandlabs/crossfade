@@ -32,4 +32,6 @@ pre{background:var(--white);border:1px solid var(--line);padding:12px;overflow:a
 .kv{display:grid;grid-template-columns:200px 1fr;gap:2px 12px;font:12.5px var(--mono)}
 .tag{display:inline-block;font-size:12px;padding:1px 7px;border:1px solid var(--line);border-radius:4px;margin:2px 4px 2px 0;background:var(--white)}
 .error{color:var(--red)}
+.span.dep .bar i{background:var(--slate)}.span.dep .nm{color:var(--slate)}
+.change.added{color:var(--pine);font-weight:600}.change.removed{color:var(--red);font-weight:600}td.path{word-break:break-word}
 @media (max-width:700px){main{padding:16px}.span{grid-template-columns:1fr 70px}.span .bar{display:none}.kv{grid-template-columns:1fr}}

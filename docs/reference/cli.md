@@ -1,8 +1,8 @@
 # CLI reference
 
-Generated from `crossfade --help`. Every command accepts `--json` where it prints data. Exit codes: 0 success, 1 usage or validation error, 2 experiment not accepted, 3 integrity failure.
+Generated from `crossfade --help` by `scripts/gen_cli_reference.py`. Every command accepts `--json` where it prints data. Exit codes: 0 success, 1 usage or validation error, 2 experiment not accepted, 3 integrity failure.
 
-## crossfade 
+## crossfade
 
 ```
  Usage: crossfade [OPTIONS] COMMAND [ARGS]...
@@ -10,24 +10,20 @@ Generated from `crossfade --help`. Every command accepts `--json` where it print
  Options
  --help          Show this message and exit.
  Commands
- init        Register this git repository with Crossfade, inspect it, and scaffold the evaluation bundle if
-             missing.
+ init        Register this git repository with Crossfade, inspect it, and scaffold the evaluation bundle if missing.
  inspect     Inspect the repository and print an evidence-labelled manifest.
- lock        Snapshot the evaluation bundle (crossfade/) into the artifact store. Experiments use the
-             locked copy.
+ lock        Snapshot the evaluation bundle (crossfade/) into the artifact store. Experiments use the locked copy.
  revision    Register a git ref (or the dirty working tree) as an immutable revision.
  observe     Run scenarios once against a revision, capture traces, and record findings.
  baseline    Establish reproducible baseline measurements for a revision.
  compare     Create and run an experiment in one step.
- evaluate    Re-run the evaluator over an experiment's recorded runs and check it reproduces the recorded
-             decision.
+ evaluate    Re-run the evaluator over an experiment's recorded runs and check it reproduces the recorded decision.
  history     Every experiment, its decision and why.
  findings    Findings recorded from traces.
  hypothesis  Record a hypothesis: a proposed mechanism and its expected impact.
- propose     Let a coding agent create a candidate in an isolated worktree. The agent never sees the
-             evaluation bundle.
- optimize    Trace the app, let an agent change it, keep what tests better, and repeat from the kept
-             version.
+ propose     Let a coding agent create a candidate from a staged copy of the base revision, without the evaluation
+             bundle.
+ optimize    Trace the app, let an agent change it, keep what tests better, and repeat from the kept version.
  verify      Verify the ledger hash chain and every artifact's digest.
  plugins     Installed plugins, what they provide, what they need, and whether they're healthy.
  serve       Start the local API and UI (localhost only by default).
@@ -179,19 +175,16 @@ Generated from `crossfade --help`. Every command accepts `--json` where it print
 
 ```
  Usage: crossfade propose [OPTIONS]
- Let a coding agent create a candidate from a staged copy of the base revision, without the evaluation
- bundle.
+ Let a coding agent create a candidate from a staged copy of the base revision, without the evaluation bundle.
  Options
- *  --agent                                      <str>   Command that runs a coding agent in the candidate
-                                                         worktree.
+ *  --agent                                      <str>   Command that runs a coding agent in the candidate worktree.
                                                          [required]
     --base                                       <str>   [default: HEAD]
     --hypothesis                                 <str>
     --name                                       <str>
-    --pass-env                                   <str>   Environment variable the agent may see
+    --pass-env                                   <str>   Environment variable the agent may see (repeatable).
+    --allow-write                                <path>  Extra directory the agent may write, e.g. its cache
                                                          (repeatable).
-    --allow-write                                <path>  Extra directory the agent may write, e.g. its
-                                                         cache (repeatable).
     --require-sandbox    --no-require-sandbox            Refuse to run without an OS sandbox.
                                                          [default: no-require-sandbox]
     --json                                               Machine-readable output.
@@ -204,23 +197,22 @@ Generated from `crossfade --help`. Every command accepts `--json` where it print
  Usage: crossfade optimize [OPTIONS]
  Trace the app, let an agent change it, keep what tests better, and repeat from the kept version.
  Options
- *  --agent                                      <str>    Command that runs a coding agent; it gets a
-                                                          staged copy of the current best revision.
+ *  --agent                                      <str>    Command that runs a coding agent; it gets a staged copy of
+                                                          the current best revision.
                                                           [required]
     --base                                       <str>    [default: HEAD]
     --rounds                                     <int>    Most rounds to run. [default: 5]
-    --patience                                   <int>    Stop after this many rounds in a row without an
-                                                          accepted change.
+    --patience                                   <int>    Stop after this many rounds in a row without an accepted
+                                                          change.
                                                           [default: 3]
     --max-minutes                                <float>  Time budget for the whole loop. [default: 60]
     --trials                                     <int>
-    --pass-env                                   <str>    Environment variable the agent may see
-                                                          (repeatable).
+    --pass-env                                   <str>    Environment variable the agent may see (repeatable).
     --allow-write                                <path>   Extra directory the agent may write (repeatable).
     --require-sandbox    --no-require-sandbox             Refuse to run without an OS sandbox.
                                                           [default: no-require-sandbox]
-    --into                                       <str>    Fast-forward this branch to the best revision
-                                                          when the loop keeps something.
+    --into                                       <str>    Fast-forward this branch to the best revision when the loop
+                                                          keeps something.
     --json                                                Machine-readable output.
     --help                                                Show this message and exit.
 ```
@@ -245,18 +237,6 @@ Generated from `crossfade --help`. Every command accepts `--json` where it print
  --help          Show this message and exit.
 ```
 
-## crossfade example
-
-```
- Usage: crossfade example [OPTIONS] {name} {dest}
- Copy an example app into a new git repo, with a baseline commit and one branch per candidate.
- Arguments
- *    name      <str>   [required]
- *    dest      <path>  [required]
- Options
- --help          Show this message and exit.
-```
-
 ## crossfade serve
 
 ```
@@ -277,93 +257,165 @@ Generated from `crossfade --help`. Every command accepts `--json` where it print
  --help          Show this message and exit.
 ```
 
-## crossfade experiment create
+## crossfade example
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'experiment create'. Did you mean 'experiment'?
-```
-
-## crossfade experiment run
-
-```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'experiment run'. Did you mean 'experiment'?
-```
-
-## crossfade experiment show
-
-```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'experiment show'. Did you mean 'experiment'?
+ Usage: crossfade example [OPTIONS] {name} {dest}
+ Copy an example app into a new git repo, with a baseline commit and one branch per candidate.
+ Arguments
+ *    name      <str>   [required]
+ *    dest      <path>  [required]
+ Options
+ --help          Show this message and exit.
 ```
 
 ## crossfade scenario list
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'scenario list'. Did you mean 'scenario'?
+ Usage: crossfade scenario list [OPTIONS]
+ Options
+ --json          Machine-readable output.
+ --help          Show this message and exit.
 ```
 
 ## crossfade scenario generate
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'scenario generate'. Did you mean 'scenario'?
+ Usage: crossfade scenario generate [OPTIONS] {run_id}
+ Draft a scenario from a recorded run. Observed outputs become *draft* expectations to review, not truth.
+ Arguments
+ *    run_id      <str>  [required]
+ Options
+ --name        <str>
+ --json               Machine-readable output.
+ --help               Show this message and exit.
 ```
 
 ## crossfade world list
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'world list'. Did you mean 'world'?
+ Usage: crossfade world list [OPTIONS]
+ Options
+ --json          Machine-readable output.
+ --help          Show this message and exit.
 ```
 
 ## crossfade world serve
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'world serve'. Did you mean 'observe', 'world', 'serve'?
+ Usage: crossfade world serve [OPTIONS]
+ Serve the locked world locally for development. Control endpoints need the printed token.
+ Options
+ --fixture        <str>  [default: default]
+ --seed           <int>  [default: 0]
+ --port           <int>  [default: 8710]
+ --help                  Show this message and exit.
 ```
 
 ## crossfade world reset
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'world reset'. Did you mean 'world'?
+ Usage: crossfade world reset [OPTIONS]
+ Reset a world started with `crossfade world serve` to its fixture state.
+ Options
+ --help          Show this message and exit.
+```
+
+## crossfade experiment create
+
+```
+ Usage: crossfade experiment create [OPTIONS]
+ Create an experiment comparing two revisions.
+ Options
+ *  --baseline          <str>  [required]
+ *  --candidate         <str>  [required]
+    --name              <str>
+    --hypothesis        <str>
+    --trials            <int>
+    --scenario          <str>
+    --json                     Machine-readable output.
+    --help                     Show this message and exit.
+```
+
+## crossfade experiment run
+
+```
+ Usage: crossfade experiment run [OPTIONS] {experiment_id}
+ Run an experiment: baseline and candidate trials, independent evaluation, decision.
+ Arguments
+ *    experiment_id      <str>  [required]
+ Options
+ --json          Machine-readable output.
+ --help          Show this message and exit.
+```
+
+## crossfade experiment show
+
+```
+ Usage: crossfade experiment show [OPTIONS] {experiment_id}
+ Show an experiment's hypothesis, revisions, runs, evaluation and decision.
+ Arguments
+ *    experiment_id      <str>  [required]
+ Options
+ --json          Machine-readable output.
+ --help          Show this message and exit.
 ```
 
 ## crossfade traces show
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'traces show'. Did you mean 'traces'?
+ Usage: crossfade traces show [OPTIONS] {run_id}
+ Show a run's spans as a tree, with timing and status. Dependency calls Crossfade measured sit under the span that made
+ them.
+ Arguments
+ *    run_id      <str>  [required]
+ Options
+ --json          Machine-readable output.
+ --help          Show this message and exit.
+```
+
+## crossfade traces diff
+
+```
+ Usage: crossfade traces diff [OPTIONS] [a] [b]
+ What the change does differently: call paths that appear, disappear, run more or fewer times, or take longer.
+ Arguments
+   a      <str>  Run id of the original (or use --experiment).
+   b      <str>  Run id of the change.
+ Options
+ --experiment  -e      <str>  Compare every completed run of both sides.
+ --scenario            <str>  Only this scenario (with --experiment).
+ --limit               <int>  Rows to print. [default: 20]
+ --json                       Machine-readable output.
+ --help                       Show this message and exit.
+```
+
+## crossfade traces export
+
+```
+ Usage: crossfade traces export [OPTIONS] [run_ids]...
+ Send runs to any OpenTelemetry backend, tagged with their commit, scenario, experiment and decision.
+ Arguments
+   run_ids      <str>  Runs to export (or use --experiment).
+ Options
+ --experiment        -e      <str>   Export every run of an experiment.
+ --otlp                      <str>   OTLP/HTTP endpoint, e.g. http://localhost:4318. Headers come from
+                                     OTEL_EXPORTER_OTLP_HEADERS.
+                                     [env var: OTEL_EXPORTER_OTLP_ENDPOINT]
+ --out                       <path>  Write OTLP/JSON to a file instead of sending it.
+ --include-holdouts                  Also export holdout runs (left out by default).
+ --json                              Machine-readable output.
+ --help                              Show this message and exit.
 ```
 
 ## crossfade traces import
 
 ```
-Usage: crossfade [OPTIONS] COMMAND [ARGS]...
-Try 'crossfade --help' for help.
- Error
- No such command 'traces import'. Did you mean 'traces'?
+ Usage: crossfade traces import [OPTIONS] {path}
+ Import an OTLP/JSON trace export as evidence (no run is attached).
+ Arguments
+ *    path      <path>  [required]
+ Options
+ --json          Machine-readable output.
+ --help          Show this message and exit.
 ```
-

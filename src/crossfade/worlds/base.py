@@ -82,6 +82,18 @@ class Call:
     start: float
     end: float
     attrs: dict[str, Any] = field(default_factory=dict)
+    trace_id: str | None = None  # from the caller's traceparent, when it sent one
+    parent_id: str | None = None
+
+
+_TRACEPARENT = re.compile(r"^[0-9a-f]{2}-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$")
+
+
+def parse_traceparent(value: str | None) -> tuple[str | None, str | None]:
+    m = _TRACEPARENT.match((value or "").strip().lower())
+    if not m or set(m.group(1)) == {"0"} or set(m.group(2)) == {"0"}:
+        return None, None
+    return m.group(1), m.group(2)
 
 
 class World:
@@ -156,9 +168,10 @@ class World:
 
     # ----- dispatch -----
 
-    def handle(self, method: str, raw_path: str, body: Any) -> Response:
+    def handle(self, method: str, raw_path: str, body: Any, traceparent: str | None = None) -> Response:
         url = urlparse(raw_path)
         start = time.time()
+        trace_id, parent_id = parse_traceparent(traceparent)
         with self._lock:
             for m, rx, pattern, fn, lat in self._routes:
                 if m != method:
@@ -175,12 +188,12 @@ class World:
                     except WorldError as e:
                         resp = Response(e.status, {"error": e.message})
                 latency = (lat if lat is not None else self.default_latency_ms) * self.latency_scale
-                call = Call(method, url.path, pattern, resp.status, start, 0)
+                call = Call(method, url.path, pattern, resp.status, start, 0, trace_id=trace_id, parent_id=parent_id)
                 self.calls.append(call)
                 break
             else:
                 self.meter("calls_unsupported")
-                self.calls.append(Call(method, url.path, "<unsupported>", 501, start, time.time(), {"coverage_gap": True}))
+                self.calls.append(Call(method, url.path, "<unsupported>", 501, start, time.time(), {"coverage_gap": True}, trace_id, parent_id))
                 return Response(501, {"error": f"world {self.name} does not implement {method} {url.path}", "coverage_gap": True})
         if latency:
             time.sleep(latency / 1000)  # outside the lock: concurrent callers wait in parallel, like a real service
@@ -201,14 +214,21 @@ class World:
         return None
 
     def spans(self, run_id: str) -> list[Span]:
-        """Dependency calls as trusted spans (measured by Crossfade, not reported by the app)."""
-        out = []
-        for i, c in enumerate(self.calls):
-            out.append(Span(trace_id=f"world-{run_id}", span_id=f"w{i:05d}", name=f"{self.name} {c.method} {c.route}", service=f"world:{self.name}",
-                            start=c.start, end=c.end, status="error" if c.status >= 500 else "ok",
-                            attributes={"http.method": c.method, "http.target": c.path, "http.status_code": c.status, **c.attrs}, source="world"))
-        return out
+        """Dependency calls as trusted spans (measured by Crossfade, not reported by the app).
 
+        A call that arrived with a traceparent becomes a child of the app span that made it, in the app's trace. Calls without
+        one share a per-run trace of their own. Ids are hex, so the spans export as valid OTLP.
+        """
+        out = []
+        own_trace = hashlib.sha256(f"world:{run_id}".encode()).hexdigest()[:32]
+        for i, c in enumerate(self.calls):
+            attrs = {"http.method": c.method, "http.target": c.path, "http.status_code": c.status,
+                     "http.request.method": c.method, "url.path": c.path, "http.route": c.route, "http.response.status_code": c.status,
+                     "crossfade.measured": True, **c.attrs}
+            out.append(Span(trace_id=c.trace_id or own_trace, span_id=hashlib.sha256(f"{run_id}:{i}".encode()).hexdigest()[:16],
+                            parent_id=c.parent_id, name=f"{self.name} {c.method} {c.route}", service=f"world:{self.name}",
+                            start=c.start, end=c.end, status="error" if c.status >= 500 else "ok", attributes=attrs, source="world"))
+        return out
 
 
 class _QuietServer(ThreadingHTTPServer):
@@ -260,7 +280,7 @@ class WorldServer:
                 if self.path == "/v1/traces" and method == "POST":  # OTLP/HTTP JSON receiver for non-Python apps
                     server.otlp_payloads.append(body)
                     return self._send(200, {})
-                resp = server.world.handle(method, self.path, body)
+                resp = server.world.handle(method, self.path, body, self.headers.get("traceparent"))
                 self._send(resp.status, resp.body)
 
             def do_GET(self) -> None:

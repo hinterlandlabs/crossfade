@@ -22,10 +22,11 @@ These modules decide what happened and whether a change is accepted. They are sm
 | Kind | Built-in | Interface |
 |---|---|---|
 | discoverer | `discovery.py` (Python AST, manifests) | `inspect(root) -> manifest` |
-| instrumentation | `instrument.py` (OTel SDK → JSONL), OTLP/JSON receiver and import | spans normalized to `models.Span` |
+| instrumentation | `instrument.py` (OTel SDK → JSONL, `traceparent` on outgoing HTTP), OTLP/JSON receiver and import | spans normalized to `models.Span` |
+| trace export | `export.py` (OTLP/HTTP or file, with run, commit, experiment and decision on the resource; behaviour diff) | `otlp(ws, runs)`, `behaviour_diff(ws, exp_id)` |
 | world runtime | `worlds/base.py` (`World`, `WorldServer`) | subclass `World`, register routes |
 | runner | `runner.py` (local process) | `run_scenario(ws, bundle, rev, scenario, trial)` |
-| harness | `harness/` (agent loop, tools, constraints, providers) | `ModelProvider.complete`, `Tool` |
+| harness | `harness/` (agent loop, tools, constraints, hooks; Anthropic, OpenAI-compatible, HTTP and fallback providers) | `ModelProvider.complete`, `Tool`, `Hook` |
 | agent adapter | `agents.py` (any command), MCP server | `propose(ws, base, command)` |
 | reporters | CLI, `api.py` + `ui/`, `mcp_server.py` | read the ledger |
 

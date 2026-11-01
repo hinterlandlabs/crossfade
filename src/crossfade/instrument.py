@@ -3,6 +3,9 @@
     python -m crossfade.instrument app.py [args...]
 
 Spans go to $CROSSFADE_TRACE_FILE as JSON lines. SIGTERM is turned into a clean exit so spans are flushed.
+
+Outgoing HTTP requests (http.client, so urllib and urllib3/requests, and httpx) carry a W3C `traceparent` header for the
+current span. The world reads it, so each dependency call Crossfade measures is recorded under the app span that made it.
 """
 
 from __future__ import annotations
@@ -54,6 +57,49 @@ class JsonlExporter(SpanExporter):
         pass
 
 
+def propagate() -> None:
+    """Add `traceparent` to outgoing HTTP requests. Safe to call twice; a header the app sets itself wins."""
+    import http.client
+
+    from opentelemetry.propagate import inject
+
+    conn = http.client.HTTPConnection
+    if getattr(conn, "_crossfade_propagates", False):
+        return
+    putrequest, putheader = conn.putrequest, conn.putheader
+
+    def _putrequest(self: http.client.HTTPConnection, *args: object, **kwargs: object) -> None:
+        putrequest(self, *args, **kwargs)  # type: ignore[arg-type]
+        carrier: dict[str, str] = {}
+        inject(carrier)
+        self._crossfade_injected = set(carrier)  # type: ignore[attr-defined]
+        for k, v in carrier.items():
+            putheader(self, k, v)
+
+    def _putheader(self: http.client.HTTPConnection, header: str | bytes, *values: object) -> None:
+        name = header.decode() if isinstance(header, bytes) else header
+        if name.lower() in getattr(self, "_crossfade_injected", ()):
+            return  # already sent for the current span; never send the header twice
+        putheader(self, header, *values)  # type: ignore[arg-type]
+
+    conn.putrequest, conn.putheader = _putrequest, _putheader  # type: ignore[method-assign]
+    conn._crossfade_propagates = True  # type: ignore[attr-defined]
+    try:
+        import httpx
+    except ImportError:
+        return
+    send = httpx.Client.send
+
+    def _send(self: httpx.Client, request: httpx.Request, **kwargs: object) -> httpx.Response:
+        carrier: dict[str, str] = {}
+        inject(carrier)
+        for k, v in carrier.items():
+            request.headers.setdefault(k, v)
+        return send(self, request, **kwargs)  # type: ignore[arg-type]
+
+    httpx.Client.send = _send  # type: ignore[method-assign]
+
+
 def setup(service: str | None = None) -> TracerProvider:
     path = os.environ.get("CROSSFADE_TRACE_FILE")
     provider = TracerProvider(resource=Resource.create({"service.name": service or os.environ.get("OTEL_SERVICE_NAME", "app")}))
@@ -61,6 +107,7 @@ def setup(service: str | None = None) -> TracerProvider:
         provider.add_span_processor(SimpleSpanProcessor(JsonlExporter(path)))
     trace.set_tracer_provider(provider)
     atexit.register(provider.shutdown)
+    propagate()
     return provider
 
 

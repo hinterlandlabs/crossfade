@@ -23,7 +23,7 @@ INTERFACE_VERSION = 1
 class PluginInfo:
     name: str
     version: str
-    kind: str  # discoverer | instrumentation | trace-store | world-runtime | runner | evaluator | harness | agent-adapter | reporter
+    kind: str  # discoverer | instrumentation | trace-store | exporter | world-runtime | runner | evaluator | harness | agent-adapter | reporter
     provides: list[str]
     permissions: list[str] = field(default_factory=list)
     health: Callable[[], tuple[bool, str]] = lambda: (True, "ok")
@@ -43,6 +43,10 @@ BUILTIN = [
     PluginInfo("discoverer.python-static", "1.0", "discoverer", ["discovery.inspect"], ["read_repository"], description="AST-based repository inspection"),
     PluginInfo("instrumentation.otel-jsonl", "1.0", "instrumentation", ["telemetry.capture"], [], _has("opentelemetry.sdk"), "OpenTelemetry SDK, spans to JSON lines"),
     PluginInfo("instrumentation.otlp-json", "1.0", "instrumentation", ["telemetry.receive", "telemetry.import"], [], description="OTLP/HTTP JSON receiver and file import"),
+    PluginInfo("instrumentation.w3c-propagation", "1.0", "instrumentation", ["telemetry.link"], [],
+               description="traceparent on outgoing HTTP, so measured dependency calls join the app's trace"),
+    PluginInfo("exporter.otlp-http", "1.0", "exporter", ["telemetry.export"], ["network:operator_endpoint"],
+               description="OTLP/HTTP JSON export tagged with commit, experiment and decision; holdouts withheld by default"),
     PluginInfo("trace-store.sqlite", "1.0", "trace-store", ["traces.query"], ["write_ledger"], description="span index in the ledger, spans in the artifact store"),
     PluginInfo("world-runtime.http", "1.0", "world-runtime", ["world.serve"], ["bind_localhost"], description="serves world plugins on 127.0.0.1"),
     PluginInfo("runner.local-process", "1.0", "runner", ["execution.run"], ["spawn_process", "bind_localhost"],
@@ -50,9 +54,12 @@ BUILTIN = [
     PluginInfo("runner.docker", "0.1", "runner", ["execution.run"], ["docker_socket"], _cmd("docker"),
                "container runner for untrusted candidates (requires Docker; interface only in this release)"),
     PluginInfo("evaluator.default", "1.0", "evaluator", ["evaluation.run"], ["read_bundle"], description="gates, expectations, bootstrap objectives"),
-    PluginInfo("harness.native", "0.1", "harness", ["agent.run"], ["network:model_endpoint"], description="Crossfade agent harness"),
+    PluginInfo("harness.native", "0.2", "harness", ["agent.run"], ["network:model_endpoint"],
+               description="agent loop with hooks, multi-call tool use and GenAI semantic-convention tracing"),
     PluginInfo("harness.anthropic-provider", "0.1", "harness", ["model.complete"], ["network:api.anthropic.com", "secret:ANTHROPIC_API_KEY"],
                lambda: (bool(__import__("os").environ.get("ANTHROPIC_API_KEY")), "ANTHROPIC_API_KEY set" if __import__("os").environ.get("ANTHROPIC_API_KEY") else "ANTHROPIC_API_KEY not set")),
+    PluginInfo("harness.openai-compatible-provider", "0.1", "harness", ["model.complete"], ["network:model_endpoint"],
+               description="OpenAI-compatible chat completions: OpenAI, Ollama, vLLM, LM Studio"),
     PluginInfo("agent-adapter.command", "1.0", "agent-adapter", ["candidate.propose"], ["spawn_process"], description="any coding agent run as a command"),
     PluginInfo("agent-adapter.claude-code", "1.0", "agent-adapter", ["candidate.propose"], ["spawn_process"], _cmd("claude"), "Claude Code via `claude -p`"),
     PluginInfo("agent-adapter.codex", "1.0", "agent-adapter", ["candidate.propose"], ["spawn_process"], _cmd("codex"), "Codex CLI via `codex exec`"),
